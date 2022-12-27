@@ -34,7 +34,7 @@ jobs:
           python -c "import urllib.request; urllib.request.urlretrieve('https://raw.githubusercontent.com/il-katta/jenkins-libs/master/resources/it/loopback/jenkins/projedit.py', 'projedit.py')"
           foreach ($file in (Get-ChildItem ./*.csproj) ) { 
             $version = python projedit.py netstandard $file
-            Write-Output "::set-output name=PROJECT_VERSION::$version"
+            Write-Output "PROJECT_VERSION=$version" >> $env:GITHUB_OUTPUT
           }
         id: project_version
 
