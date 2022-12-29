@@ -1,6 +1,6 @@
 ﻿namespace ACUtils.AXRepository.Attributes
 {
-    [System.AttributeUsage(System.AttributeTargets.Property, AllowMultiple = false)]
+    [System.AttributeUsage(System.AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
     public class AxFieldAttribute : DbFieldAttribute, IAxFieldAttribute
     {
         readonly string ax_field;

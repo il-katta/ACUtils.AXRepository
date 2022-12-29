@@ -236,16 +236,33 @@ namespace ACUtils.AXRepository
 
         public AxFieldAttribute GetArxivarAttribute(string propertyName)
         {
-            var propr = GetType().GetProperty(propertyName);
-            var attrs = propr.GetCustomAttributes(typeof(AxFieldAttribute), true);
-            return attrs.LastOrDefault() as AxFieldAttribute;
+            return getAttribute<AxFieldAttribute>(propertyName);
         }
 
         public AxDbFieldAttribute GetAxDbAttribute(string propertyName)
         {
+            return getAttribute<AxDbFieldAttribute>(propertyName);
+        }
+
+        private A getAttribute<A>(string propertyName) where A : class
+        {
             var propr = GetType().GetProperty(propertyName);
-            var attrs = propr.GetCustomAttributes(typeof(AxDbFieldAttribute), true);
-            return attrs.LastOrDefault() as AxDbFieldAttribute;
+            var attrs = propr.GetCustomAttributes(typeof(A), true);
+            if (attrs.Length == 0)
+            {
+                attrs = System.Attribute.GetCustomAttributes(propr, typeof(A), true);
+            }
+            return attrs.LastOrDefault() as A;
+        }
+
+        private A getAttribute<A>() where A : class
+        {
+            var attrs = GetType().GetCustomAttributes(typeof(A), true);
+            if (attrs.Length == 0)
+            {
+                attrs = System.Attribute.GetCustomAttributes(typeof(A), true);
+            }
+            return attrs.LastOrDefault() as A;
         }
 
         public List<AxFieldAttribute> GetArxivarAttributes()
