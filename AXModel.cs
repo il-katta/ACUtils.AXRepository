@@ -15,7 +15,7 @@ namespace ACUtils.AXRepository
         [AxField(ax_field: "DOCNUMBER")]
         public virtual int? DOCNUMBER { get; set; }
 
-        public string FilePath { get; set; }
+        public virtual string FilePath { get; set; }
 
         private string _stato;
         [AxField(ax_field: "Stato")]
@@ -66,7 +66,7 @@ namespace ACUtils.AXRepository
         [AxField(ax_field: "WORKFLOW")]
         public virtual bool? Workflow { get; set; }
 
-        public List<string> Allegati { get; set; }
+        public virtual List<string> Allegati { get; set; }
 
         #endregion
 
