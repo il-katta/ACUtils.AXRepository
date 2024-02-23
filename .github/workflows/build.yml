@@ -73,9 +73,23 @@ jobs:
             dist/*.nupkg
             dist/*.snupkg
 
-      - name: Publish
+
+      - name: Publish ( nuget )
         run: |
           foreach ($file in (Get-ChildItem dist/*.nupkg) ) { 
             nuget push $file -Source https://api.nuget.org/v3/index.json -SkipDuplicate
           }
+      
+      - name: Publish ( github )
+        run: |
+          dotnet nuget add source --username il-katta --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/il-katta/index.json"
+          foreach ($file in (Get-ChildItem dist/*.nupkg) ) { 
+            dotnet nuget push $file --source "https://nuget.pkg.github.com/il-katta/index.json" --skip-duplicate
+          }
 
+      
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v1
+        with:
+          nuget-api-key: ${{ secrets.NuGetAPIKey }}
+          nuget-version: '5.x'

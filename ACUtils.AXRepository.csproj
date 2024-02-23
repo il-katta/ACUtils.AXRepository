@@ -18,16 +18,15 @@
   <ItemGroup>
     <PackageReference Include="ACUtils.FileUtils" Version="1.0.0.142" />
     <PackageReference Include="ACUtils.Logger" Version="1.0.0.140" />
-    <PackageReference Include="ACUtils.SqlDb" Version="1.0.0.149" />
+    <PackageReference Include="ACUtils.SqlDb" Version="1.0.0.155" />
     <PackageReference Include="ACUtils.StringUtils" Version="1.0.0.141" />
-    <PackageReference Include="ARXivar.WebApi.Client.Arxivar" Version="2.5.5" />
-    <PackageReference Include="ARXivar.WebApi.Client.ArxivarWorkflow.NetFx" Version="2.5.0" />
-    <PackageReference Include="ARXivar.WebApi.Client.ArxivarManagement.NetFx" Version="2.5.0" />
-    <PackageReference Include="JsonSubTypes" Version="1.8.0.0" />
+    <PackageReference Include="ARXivar.WebApi.Client.Arxivar" Version="2.9.7" />
+    <PackageReference Include="ARXivar.WebApi.Client.ArxivarManagement.NetFx" Version="2.9.0" />
+    <PackageReference Include="ARXivar.WebApi.Client.ArxivarWorkflow.NetFx" Version="2.9.4" />
+    <PackageReference Include="JsonSubTypes" Version="2.0.1" />
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="6.0.0.0" />
     <PackageReference Include="Microsoft.CSharp" Version="4.6.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.2" />
-    <PackageReference Include="RestSharp" Version="106.11.7" />
   </ItemGroup>
 
   <ItemGroup>

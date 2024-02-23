@@ -40,11 +40,11 @@ namespace ACUtils.AXRepository
         [AxToExternalIdField]
         public virtual IEnumerable<string> DestinatariCodiceRubrica { get; set; }
 
-        [AxField(ax_field: "To")]
-        public virtual IEnumerable<int?> DestinatariId { get; protected set; }
+        //[AxField(ax_field: "To")]
+        //public virtual IEnumerable<int?> DestinatariId { get; protected set; }
 
         [AxField(ax_field: "To")]
-        public virtual IEnumerable<string> Destinatari { get; protected set; }
+        public virtual IEnumerable<string> Destinatari { get; set; }
 
         //[AxField(ax_field: "To_IdRubrica")]
         public virtual int? DestinatariIdRubrica { get; set; }
@@ -65,8 +65,16 @@ namespace ACUtils.AXRepository
 
         [AxField(ax_field: "WORKFLOW")]
         public virtual bool? Workflow { get; set; }
+        
+        /// <summary>
+        /// lista di files ( percorsi assoluti di files ) da aggiungere come allegati al documento
+        /// </summary>
+        public virtual List<string>? Allegati { get; set; }
 
-        public virtual List<string> Allegati { get; set; }
+        /// <summary>
+        /// lista di bufferid di file da aggiungere come allegato al documento
+        /// </summary>
+        public virtual List<string>? allegati_arxivar { get;set; }
 
         #endregion
 

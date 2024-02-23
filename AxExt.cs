@@ -41,7 +41,16 @@ namespace ACUtils.AXRepository
         public static DocumentTypeBaseDTO SetDocumentType(this List<FieldBaseDTO> fields, Configuration configuration, string aooCode, string docType)
         {
             var docTypesApi = new DocumentTypesApi(configuration);
-            var doctypes = docTypesApi.DocumentTypesGetOld(1, aooCode); // TODO: deprecated method
+            List<DocumentTypeBaseDTO> doctypes;
+            try
+            {
+                doctypes = docTypesApi.DocumentTypesGet();
+            }
+            catch (Abletech.WebApi.Client.Arxivar.Client.ApiException)
+            {
+                doctypes = docTypesApi.DocumentTypesGetOld(0, aooCode); 
+            }
+            
             try
             {
                 DocumentTypeBaseDTO classeDoc = doctypes.First(i =>

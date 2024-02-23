@@ -14,27 +14,27 @@ namespace ACUtils.AXRepository
     public class ArxivarRepository
     {
         const string STATO_ELIMINATO = "ELIMINATO";
-        private string _username;
-        private string _password;
-        private string _apiUrl;
-        private string _managementUrl;
-        private string _workflowUrl;
-        private string _appId;
-        private string _appSecret;
-        private string _wcfUrl;
-        private long? _impersonateUserId;
+        protected string _username;
+        protected string _password;
+        protected string _apiUrl;
+        protected string _managementUrl;
+        protected string _workflowUrl;
+        protected string _appId;
+        protected string _appSecret;
+        protected string _wcfUrl;
+        protected long? _impersonateUserId;
 
-        private string _token;
-        private string _refreshToken;
+        protected string _token;
+        protected string _refreshToken;
 
-        private string _tokenManagement;
-        private string _refreshTokenManagement;
+        protected string _tokenManagement;
+        protected string _refreshTokenManagement;
 
         ACUtils.ILogger _logger = null;
 
         #region configuration
 
-        private Abletech.WebApi.Client.Arxivar.Client.Configuration configuration =>
+        protected Abletech.WebApi.Client.Arxivar.Client.Configuration configuration =>
             new Abletech.WebApi.Client.Arxivar.Client.Configuration()
             {
                 ApiKey = new Dictionary<string, string>() { { "Authorization", _token } },
@@ -42,7 +42,7 @@ namespace ACUtils.AXRepository
                 BasePath = _apiUrl,
             };
 
-        private Abletech.WebApi.Client.ArxivarManagement.Client.Configuration configurationManagement =>
+        protected Abletech.WebApi.Client.ArxivarManagement.Client.Configuration configurationManagement =>
             new Abletech.WebApi.Client.ArxivarManagement.Client.Configuration()
             {
                 ApiKey = new Dictionary<string, string>() { { "Authorization", _tokenManagement } },
@@ -50,7 +50,7 @@ namespace ACUtils.AXRepository
                 BasePath = _managementUrl,
             };
 
-        private Abletech.WebApi.Client.ArxivarWorkflow.Client.Configuration configurationWorkflow =>
+        protected Abletech.WebApi.Client.ArxivarWorkflow.Client.Configuration configurationWorkflow =>
             new Abletech.WebApi.Client.ArxivarWorkflow.Client.Configuration()
             {
                 ApiKey = new Dictionary<string, string>() { { "Authorization", _token } },
@@ -95,6 +95,13 @@ namespace ACUtils.AXRepository
             this._workflowUrl = workflowUrl;
             this._logger = logger;
             _token = authToken;
+        }
+
+
+        public void authToken(string token, string refreshToken)
+        {
+            this._token = token;
+            this._refreshToken = refreshToken;
         }
 
         #endregion
@@ -153,9 +160,14 @@ namespace ACUtils.AXRepository
             var userApi = new Abletech.WebApi.Client.Arxivar.Api.UsersApi(configuration);
             // Dm_Rubrica.RAGIONE_SOCIALE = username | Dm_Rubrica.TIPO=U | Dm_Rubrica.STATO=P
             var users = userApi.UsersGet_0();
-            var id = users.Where(u => u.Description.Equals(username, StringComparison.CurrentCultureIgnoreCase)).FirstOrDefault()?.User;
+            var search = users.Where(u =>
+                u.Description.Equals(username, StringComparison.CurrentCultureIgnoreCase) ||
+                u.CompleteName.Equals(username, StringComparison.CurrentCultureIgnoreCase)
+            );
+            var id = search.FirstOrDefault()?.User;
             return addressBookApi.AddressBookGetByUserId(id, type);
         }
+
 
         public Abletech.WebApi.Client.Arxivar.Model.UserInfoDTO UserInfo()
         {
@@ -234,14 +246,14 @@ namespace ACUtils.AXRepository
                 nation: addressBook.Country,
                 addressBookId: addressBook.Id,
                 society: ""
-                //officeCode: "",
-                //publicAdministrationCode: "",
-                //pecAddressBook: "",
-                //feaEnabled: false,
-                //feaExpireDate: null,
-                //firstName: "",
-                //lastName: "",
-                //pec: ""
+            //officeCode: "",
+            //publicAdministrationCode: "",
+            //pecAddressBook: "",
+            //feaEnabled: false,
+            //feaExpireDate: null,
+            //firstName: "",
+            //lastName: "",
+            //pec: ""
             );
 
 
@@ -644,6 +656,11 @@ namespace ACUtils.AXRepository
                 }
             }
 
+            if (model.allegati_arxivar != null)
+            {
+                profileDto.Attachments.AddRange(model.allegati_arxivar);
+            }
+
             var classeDoc = profileDto.SetDocumentType(configuration, aoo.Code, documentType);
 
             var status = statesApi.StatesGet(classeDoc.Id);
@@ -671,11 +688,14 @@ namespace ACUtils.AXRepository
 
             if (!string.IsNullOrEmpty(model.MittenteCodiceRubrica))
             {
-                profileDto.SetFromField(GetAddressBookEntry(
-                    model.MittenteCodiceRubrica,
-                    model.MittenteIdRubrica.GetValueOrDefault(),
-                    type: UserProfileType.From
-                ));
+                if (model.MittenteIdRubrica.HasValue)
+                {
+                    profileDto.SetFromField(GetAddressBookEntry(
+                        model.MittenteCodiceRubrica,
+                        model.MittenteIdRubrica.Value,
+                        type: UserProfileType.From
+                    ));
+                }
             }
 
             if (model.DestinatariCodiceRubrica != null)
@@ -684,7 +704,7 @@ namespace ACUtils.AXRepository
                 {
                     profileDto.SetToField(GetAddressBookEntry(
                         destinatario,
-                        model.DestinatariIdRubrica.GetValueOrDefault(),
+                        model.DestinatariIdRubrica ?? 0,
                         type: UserProfileType.To
                     ));
                 }
@@ -693,9 +713,23 @@ namespace ACUtils.AXRepository
             model.STATO = model.STATO ?? statesApi.StatesGet(classeDoc.Id).First().Id;
             foreach (var field in model.GetArxivarFields())
             {
-                if (new[] { "FROM", "TO", "CC" }.Contains(field.Key.ToUpper()))
+                if (field.Value == null) continue;
+                
+                if (field.Key.Equals("TO", StringComparison.InvariantCultureIgnoreCase))
                 {
-                    // TODO: ricercare il profilo in base al dato passato
+                    /*
+                    foreach(var to in (List<string>)field.Value)
+                    {
+                        profileDto.SetToField(GetAddressBookEntry(to, 0, UserProfileType.To));
+                    }*/
+                }
+                else if (field.Key.Equals("FROM", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    //profileDto.SetFromField(GetAddressBookEntry(field.Value.ToString(), 0, UserProfileType.From));
+                }
+                else if (field.Key.Equals("CC", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    //profileDto.SetCcField(GetUserAddressBookEntry(field.Value, 2));
                 }
                 else if (field.Key.Equals(Attributes.AxFromExternalIdFieldAttribute.AX_KEY))
                 {
@@ -1295,7 +1329,6 @@ namespace ACUtils.AXRepository
 
         #endregion
 
-
         #region workflow2
 
         public void Wf2_SetVariable(Guid taskId, string name, string value)
@@ -1304,10 +1337,10 @@ namespace ACUtils.AXRepository
 
             var response = taskOperationsApi.ApiV1TaskOperationsTaskTaskIdVariablesGet(taskId);
 
-            var variable = response.Items.First(v => v.VariableDefinition.Configuration.Name.Equals(name));
+            var variable = response.First(v => v.VariableDefinition.Configuration.Name.Equals(name));
 
             taskOperationsApi.ApiV1TaskOperationsExecuteSetVariablesPost(new Abletech.WebApi.Client.ArxivarWorkflow.Model.ExecuteSetVariablesOperationRm(
-                
+
                 setVariables: new List<Abletech.WebApi.Client.ArxivarWorkflow.Model.ProcessManualSetVariableRm>()
                 {
                     {
