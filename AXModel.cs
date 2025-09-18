@@ -17,6 +17,8 @@ namespace ACUtils.AXRepository
 
         public virtual string FilePath { get; set; }
 
+        public virtual (string name, byte[] bytes)? File { get; set; }
+
         private string _stato;
         [AxField(ax_field: "Stato")]
         public virtual string STATO

@@ -27,6 +27,7 @@
     <PackageReference Include="Microsoft.Bcl.AsyncInterfaces" Version="6.0.0.0" />
     <PackageReference Include="Microsoft.CSharp" Version="4.6.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.2" />
+    <PackageReference Include="System.Data.SqlClient" Version="4.8.6" />
   </ItemGroup>
 
   <ItemGroup>

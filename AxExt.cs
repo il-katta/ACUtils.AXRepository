@@ -143,6 +143,9 @@ namespace ACUtils.AXRepository
             {
                 return (T)Convert.ChangeType((field as DocumentTypeFieldDTO).Value, typeof(T));
             }
+            else if (field?.ClassName == "AdditionalFieldTableDTO") {
+                return (T)Convert.ChangeType((field as AdditionalFieldTableDTO).Value, typeof(T));
+            } 
             else
             {
                 throw new Exception($"'{name}' - type '{field?.ClassName}': not permitted ");
@@ -175,7 +178,7 @@ namespace ACUtils.AXRepository
             );
             if (field == null)
             {
-                throw new Exception($"'{name}': campo Arxivar non trovato");
+                throw new AXFieldNotFoundException($"'{name}': campo Arxivar non trovato");
             }
             if (field?.ClassName == "SubjectFieldDTO")
             {
@@ -220,6 +223,15 @@ namespace ACUtils.AXRepository
             else if (field?.ClassName == "StateFieldDTO")
             {
                 (field as StateFieldDTO).Value = (string)value;
+            }
+            else if(field?.ClassName == "ToFieldDTO")
+            {
+                // TODO: implement
+                (field as ToFieldDTO).Value = (List<UserProfileDTO>)value;
+            }
+            else if (field?.ClassName == "AdditionalFieldTableDTO")
+            {
+                (field as AdditionalFieldTableDTO).Value = (string)value;
             }
             else
             {

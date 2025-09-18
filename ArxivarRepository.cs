@@ -3,9 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-
 using Newtonsoft.Json.Linq;
-
 using ACUtils.AXRepository.Exceptions;
 
 
@@ -21,6 +19,7 @@ namespace ACUtils.AXRepository
         protected string _workflowUrl;
         protected string _appId;
         protected string _appSecret;
+        protected string _aoo;
         protected string _wcfUrl;
         protected long? _impersonateUserId;
 
@@ -30,7 +29,7 @@ namespace ACUtils.AXRepository
         protected string _tokenManagement;
         protected string _refreshTokenManagement;
 
-        ACUtils.ILogger _logger = null;
+        ACUtils.ILogger? _logger = null;
 
         #region configuration
 
@@ -63,9 +62,10 @@ namespace ACUtils.AXRepository
         #region constructor
 
         public ArxivarRepository(
-            string apiUrl, string managementUrl, string workflowUrl, string username, string password, string appId, string appSecret,
+            string apiUrl, string managementUrl, string workflowUrl, string username, string password, string appId,
+            string appSecret, string AOO,
             string wcf_url = "net.tcp://127.0.0.1:8740/Arxivar/Push",
-            ACUtils.ILogger logger = null,
+            ACUtils.ILogger? logger = null,
             long? impersonateUserId = null
         )
         {
@@ -78,22 +78,25 @@ namespace ACUtils.AXRepository
             this._appSecret = appSecret;
             this._logger = logger;
             this._wcfUrl = wcf_url;
+            this._aoo = AOO;
             this._impersonateUserId = impersonateUserId;
         }
 
 
         public ArxivarRepository(
-           string apiUrl,
-           string managementUrl,
-           string workflowUrl,
-           string authToken,
-           ACUtils.ILogger logger = null
+            string apiUrl,
+            string managementUrl,
+            string workflowUrl,
+            string authToken,
+            string AO,
+            ACUtils.ILogger logger = null
         )
         {
             this._apiUrl = apiUrl;
             this._managementUrl = managementUrl;
             this._workflowUrl = workflowUrl;
             this._logger = logger;
+            this._aoo = AO;
             _token = authToken;
         }
 
@@ -107,6 +110,7 @@ namespace ACUtils.AXRepository
         #endregion
 
         #region file upload
+
         public List<string> UploadFile(Stream stream)
         {
             Login();
@@ -119,6 +123,37 @@ namespace ACUtils.AXRepository
             string tempDirectory = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
             Directory.CreateDirectory(tempDirectory);
             return tempDirectory;
+        }
+
+        public List<string> UploadFile(string filename, byte[] bytes)
+        {
+            Login();
+            var bufferApi = new Abletech.WebApi.Client.Arxivar.Api.BufferApi(configuration);
+            var tmpDir = GetTemporaryDirectory();
+            try
+            {
+                var tmppath = Path.Combine(tmpDir, filename);
+                using (var stream = new MemoryStream(bytes))
+                {
+                    using (var fileStream = new FileStream(tmppath, FileMode.CreateNew, FileAccess.ReadWrite))
+                    {
+                        stream.WriteTo(fileStream);
+                        fileStream.Flush();
+                        fileStream.Seek(0, SeekOrigin.Begin);
+                        return bufferApi.BufferInsert(fileStream);
+                    }
+                }
+            }
+            finally
+            {
+                try
+                {
+                    System.IO.Directory.Delete(tmpDir, true);
+                }
+                catch
+                {
+                }
+            }
         }
 
         public List<string> UploadFile(string filePath, string filename = null)
@@ -145,42 +180,16 @@ namespace ACUtils.AXRepository
                 {
                     System.IO.Directory.Delete(tmpDir, true);
                 }
-                catch { }
+                catch
+                {
+                }
             }
-
-        }
-        #endregion
-
-        #region user
-        public Abletech.WebApi.Client.Arxivar.Model.UserProfileDTO GetUserAddressBookEntry(string username, int type = 0)
-        {
-            Login();
-
-            var addressBookApi = new Abletech.WebApi.Client.Arxivar.Api.AddressBookApi(configuration);
-            var userApi = new Abletech.WebApi.Client.Arxivar.Api.UsersApi(configuration);
-            // Dm_Rubrica.RAGIONE_SOCIALE = username | Dm_Rubrica.TIPO=U | Dm_Rubrica.STATO=P
-            var users = userApi.UsersGet_0();
-            var search = users.Where(u =>
-                u.Description.Equals(username, StringComparison.CurrentCultureIgnoreCase) ||
-                u.CompleteName.Equals(username, StringComparison.CurrentCultureIgnoreCase)
-            );
-            var id = search.FirstOrDefault()?.User;
-            return addressBookApi.AddressBookGetByUserId(id, type);
-        }
-
-
-        public Abletech.WebApi.Client.Arxivar.Model.UserInfoDTO UserInfo()
-        {
-            Login();
-            var api = new Abletech.WebApi.Client.Arxivar.Api.UsersApi(configuration);
-            var userInfo = api.UsersGetUserInfo();
-            return userInfo;
         }
 
         #endregion
+
 
         #region address book
-
 
         /// <summary>
         /// 
@@ -189,7 +198,8 @@ namespace ACUtils.AXRepository
         /// <param name="addressBookCategoryId"></param>
         /// <param name="type">Possible values:  To => 0 | From => 1 |  CC => 2 | Senders => 3</param>
         /// <returns></returns>
-        public Abletech.WebApi.Client.Arxivar.Model.UserProfileDTO GetAddressBookEntry(string codice, int addressBookCategoryId, UserProfileType type = UserProfileType.To)
+        public Abletech.WebApi.Client.Arxivar.Model.UserProfileDTO GetAddressBookEntry(string codice,
+            int addressBookCategoryId, UserProfileType type = UserProfileType.To)
         {
             Login();
 
@@ -202,12 +212,13 @@ namespace ACUtils.AXRepository
                 .Select("DM_RUBRICA_SYSTEM_ID")
                 .Select("ID");
 
-            var results = addressBookApi.AddressBookPostSearch(new Abletech.WebApi.Client.Arxivar.Model.AddressBookSearchCriteriaDTO(
-                filter: codice,
-                addressBookCategoryId: addressBookCategoryId,
-                filterFields: filter,
-                selectFields: select
-            ));
+            var results = addressBookApi.AddressBookPostSearch(
+                new Abletech.WebApi.Client.Arxivar.Model.AddressBookSearchCriteriaDTO(
+                    filter: codice,
+                    addressBookCategoryId: addressBookCategoryId,
+                    filterFields: filter,
+                    selectFields: select
+                ));
 
             var result = results.Data.First();
 
@@ -246,18 +257,17 @@ namespace ACUtils.AXRepository
                 nation: addressBook.Country,
                 addressBookId: addressBook.Id,
                 society: ""
-            //officeCode: "",
-            //publicAdministrationCode: "",
-            //pecAddressBook: "",
-            //feaEnabled: false,
-            //feaExpireDate: null,
-            //firstName: "",
-            //lastName: "",
-            //pec: ""
+                //officeCode: "",
+                //publicAdministrationCode: "",
+                //pecAddressBook: "",
+                //feaEnabled: false,
+                //feaExpireDate: null,
+                //firstName: "",
+                //lastName: "",
+                //pec: ""
             );
-
-
         }
+
         #endregion
 
         #region auth
@@ -266,15 +276,17 @@ namespace ACUtils.AXRepository
         {
             var authApi = new Abletech.WebApi.Client.Arxivar.Api.AuthenticationApi(_apiUrl);
             var auth = authApi.AuthenticationGetToken(
-                    new Abletech.WebApi.Client.Arxivar.Model.AuthenticationTokenRequestDTO(
-                        username: _username,
-                        password: _password,
-                        clientId: _appId,
-                        clientSecret: _appSecret,
-                        impersonateUserId: _impersonateUserId.HasValue ? System.Convert.ToInt32(_impersonateUserId) : default(int?),
-                        scopeList: scopeList
-                    )
-                );
+                new Abletech.WebApi.Client.Arxivar.Model.AuthenticationTokenRequestDTO(
+                    username: _username,
+                    password: _password,
+                    clientId: _appId,
+                    clientSecret: _appSecret,
+                    impersonateUserId: _impersonateUserId.HasValue
+                        ? System.Convert.ToInt32(_impersonateUserId)
+                        : default(int?),
+                    scopeList: scopeList
+                )
+            );
             return auth;
         }
 
@@ -301,11 +313,10 @@ namespace ACUtils.AXRepository
             }
         }
 
-
-
         #endregion
 
         #region profile - get
+
         public T GetProfile<T>(int docnumber) where T : AXModel<T>, new()
         {
             Login();
@@ -314,6 +325,7 @@ namespace ACUtils.AXRepository
             var obj = AXModel<T>.Idrate(profile);
             return obj;
         }
+
         #endregion
 
         #region profile - search
@@ -321,8 +333,14 @@ namespace ACUtils.AXRepository
         public List<T> Search<T>(AXModel<T> model, bool eliminato = false) where T : AXModel<T>, new()
         {
             var searchValues = model.GetPrimaryKeys();
-            var classeDoc = model.GetArxivarAttribute().DocumentType;
-            var result = Search(
+            return Search<T>(searchValues, eliminato);
+        }
+
+        public List<T> Search<T>(Dictionary<string, object> searchValues = null, bool eliminato = false)
+            where T : AXModel<T>, new()
+        {
+            var classeDoc = (new T()).GetArxivarAttribute().DocumentType;
+            var result = RawSearch(
                 classeDoc: classeDoc,
                 searchValues: searchValues,
                 eliminato: eliminato
@@ -331,35 +349,35 @@ namespace ACUtils.AXRepository
             var profiles = result.Select(s => GetProfile<T>(s.Columns.GetValue<int>("DOCNUMBER"))).ToList();
             return profiles;
         }
-        public List<Abletech.WebApi.Client.Arxivar.Model.RowSearchResult> Search(string classeDoc, Dictionary<string, object> searchValues = null, bool eliminato = false, bool selectAll = false)
+
+
+        public List<Abletech.WebApi.Client.Arxivar.Model.RowSearchResult> RawSearch(string classeDoc,
+            Dictionary<string, object> searchValues = null, bool eliminato = false, bool selectAll = false)
         {
             Login();
             var profileApi = new Abletech.WebApi.Client.Arxivar.Api.ProfilesApi(configuration);
             var statesApi = new Abletech.WebApi.Client.Arxivar.Api.StatesApi(configuration);
-            var aooApi = new Abletech.WebApi.Client.Arxivar.Api.BusinessUnitsApi(configuration);
-            var aoo = aooApi.BusinessUnitsGet(null, null).First(); // TODO: change me
 
             var searchApi = new Abletech.WebApi.Client.Arxivar.Api.SearchesApi(configuration);
             var docTypesApi = new Abletech.WebApi.Client.Arxivar.Api.DocumentTypesApi(configuration);
-            var docTypes = docTypesApi.DocumentTypesGetOld(1, aoo.Code); // TODO replace deprecated method
+            var docTypes = docTypesApi.DocumentTypesGetOld(1, this._aoo); // TODO replace deprecated method
 
             var classeDocumento = docTypes.First(i => i.Key == classeDoc);
 
             var filterSearch = searchApi.SearchesGet()
-                .Set("DOCUMENTTYPE", new Abletech.WebApi.Client.Arxivar.Model.DocumentTypeSearchFilterDto(classeDocumento.DocumentType, classeDocumento.Type2, classeDocumento.Type3)); ;
-            //var defaultSelect = searchApi.SearchesGetSelect_0(classeDocumento.Id);
-            var defaultSelect = searchApi.SearchesGetSelect_1(classeDocumento.DocumentType, classeDocumento.Type2, classeDocumento.Type3)
+                .Set("DOCUMENTTYPE",
+                    new Abletech.WebApi.Client.Arxivar.Model.DocumentTypeSearchFilterDto(classeDocumento.DocumentType,
+                        classeDocumento.Type2, classeDocumento.Type3));
+            ;
+
+            var defaultSelect = searchApi
+                .SearchesGetSelect_1(classeDocumento.DocumentType, classeDocumento.Type2, classeDocumento.Type3)
                 .Select("WORKFLOW")
                 .Select("DOCNUMBER");
-            /*
-            foreach (var axfield in model.GetArxivarFields())
-            {
-                defaultSelect.Select(axfield.Key);
-            }
-            */
 
 
-            var additionals = searchApi.SearchesGetAdditionalByClasse(classeDocumento.DocumentType, classeDocumento.Type2, classeDocumento.Type3, aoo.Code);
+            var additionals = searchApi.SearchesGetAdditionalByClasse(classeDocumento.DocumentType,
+                classeDocumento.Type2, classeDocumento.Type3, this._aoo);
             filterSearch.Fields.AddRange(additionals);
 
             if (!(searchValues is null))
@@ -385,14 +403,17 @@ namespace ACUtils.AXRepository
                 filterSearch.Set("Stato", STATO_ELIMINATO, 2); // diverso da ELIMINATO
             }
 
-            var values = searchApi.SearchesPostSearch(new Abletech.WebApi.Client.Arxivar.Model.SearchCriteriaDto(filterSearch, defaultSelect));
+            var values =
+                searchApi.SearchesPostSearch(
+                    new Abletech.WebApi.Client.Arxivar.Model.SearchCriteriaDto(filterSearch, defaultSelect));
             return values;
         }
 
-        public int GetDocumentNumber(string classeDoc, Dictionary<string, object> searchValues, bool eliminato = false, bool getFirst = false)
+        public int GetDocumentNumber(string classeDoc, Dictionary<string, object> searchValues, bool eliminato = false,
+            bool getFirst = false)
         {
             Login();
-            var values = Search(classeDoc: classeDoc, searchValues: searchValues, eliminato: eliminato);
+            var values = RawSearch(classeDoc: classeDoc, searchValues: searchValues, eliminato: eliminato);
 
             if (values.Count > 1)
             {
@@ -426,7 +447,9 @@ namespace ACUtils.AXRepository
             var docNumber = (int)values.First().Get("DOCNUMBER").Value;
             return docNumber;
         }
-        public int GetDocumentNumber<T>(AXModel<T> model, bool eliminato = false, bool getFirst = false) where T : AXModel<T>, new()
+
+        public int GetDocumentNumber<T>(AXModel<T> model, bool eliminato = false, bool getFirst = false)
+            where T : AXModel<T>, new()
         {
             var searchValues = model.GetPrimaryKeys();
             var classeDoc = model.GetArxivarAttribute().DocumentType;
@@ -437,9 +460,11 @@ namespace ACUtils.AXRepository
                 getFirst: getFirst
             );
         }
+
         #endregion
 
         #region profile - update
+
         /// <summary>
         /// 
         /// </summary>
@@ -449,11 +474,25 @@ namespace ACUtils.AXRepository
         /// <param name="checkInOption"></param>
         /// <param name="killWorkflow"></param>
         /// <returns></returns>
-        public long? UpdateProfile<T>(AXModel<T> model, int? taskid = null, int? procdocid = null, int checkInOption = 0, bool killWorkflow = false) where T : AXModel<T>, new()
+        public long? UpdateProfile<T>(AXModel<T> model, int? taskid = null, int? procdocid = null,
+            int checkInOption = 0, bool killWorkflow = false) where T : AXModel<T>, new()
         {
             Login();
             List<string> bufferIds = new List<string>();
-            var doc = Search<T>(model).First();
+            T doc;
+            if (model.DOCNUMBER.HasValue)
+            {
+                doc = GetProfile<T>(model.DOCNUMBER.Value);
+            }
+            else if (model.GetPrimaryKeys().Count > 0)
+            {
+                doc = Search<T>(model).First();
+            }
+            else
+            {
+                throw new Exception("Cannot update profile without DOCNUMBER or primary keys");
+            }
+
             var workflow = System.Convert.ToInt64(doc.Workflow ?? false);
 
             //var docNumber = model.DOCNUMBER ?? GetDocumentNumber(model);
@@ -464,25 +503,30 @@ namespace ACUtils.AXRepository
                 try
                 {
                     var workflowApi = new Abletech.WebApi.Client.Arxivar.Api.WorkflowApi(configuration);
-                    var workflowHistory = workflowApi.WorkflowGetWorkflowInfoByDocnumber(System.Convert.ToInt32(docNumber));
+                    var workflowHistory =
+                        workflowApi.WorkflowGetWorkflowInfoByDocnumber(System.Convert.ToInt32(docNumber));
 
                     var processId = workflowHistory.Where(w => w.State == 1).Select(w => w.Id).FirstOrDefault();
                     if (processId.HasValue)
                     {
-
-                        var taskworkhistoryapi = new Abletech.WebApi.Client.Arxivar.Api.TaskWorkHistoryApi(configuration);
+                        var taskworkhistoryapi =
+                            new Abletech.WebApi.Client.Arxivar.Api.TaskWorkHistoryApi(configuration);
                         var history = taskworkhistoryapi.TaskWorkHistoryGetHistoryByProcessId(processId);
-                        if (!history.Where(r => !r.GetValue<DateTime?>("CONCLUSO").HasValue).Any()) // WTF? controllare questa condizione
+                        if (!history.Where(r => !r.GetValue<DateTime?>("CONCLUSO").HasValue)
+                                .Any()) // WTF? controllare questa condizione
                         {
                             DeleteWorkflow(processId);
                         }
+
                         workflowApi.WorkflowFreeUserConstraint(processId.Value);
                     }
+
                     var processDocumentApi = new Abletech.WebApi.Client.Arxivar.Api.ProcessDocumentApi(configuration);
                     processDocumentApi.ProcessDocumentFreeWorkflowConstraint(System.Convert.ToInt32(docNumber));
                 }
-                catch { }
-
+                catch
+                {
+                }
             }
 
             var profilesApi = new Abletech.WebApi.Client.Arxivar.Api.ProfilesApi(configuration);
@@ -509,12 +553,21 @@ namespace ACUtils.AXRepository
 
             foreach (var field in model.GetArxivarFields())
             {
-                profileDto.SetField(field.Key, field.Value);
+                try
+                {
+                    profileDto.SetField(field.Key, field.Value);
+                }
+                catch (AXFieldNotFoundException)
+                {
+                    if (
+                        field.Key != "From_ExternalId" &&
+                        field.Key != "To_ExternalId"
+                    ) throw;
+                }
             }
 
-            if (!string.IsNullOrEmpty(model.FilePath))
+            if (!string.IsNullOrEmpty(model.FilePath) || model.File.HasValue)
             {
-
                 var apiCache = new Abletech.WebApi.Client.Arxivar.Api.CacheApi(configuration);
                 var checkInOutApi = new Abletech.WebApi.Client.Arxivar.Api.CheckInOutApi(configuration);
                 //var taskWorkApi = new ArxivarNext.Api.TaskWorkApi(configuration);
@@ -533,7 +586,17 @@ namespace ACUtils.AXRepository
                 {
                     checkInOutApi.CheckInOutCheckOut(System.Convert.ToInt32(docNumber));
                 }
-                bufferIds = apiCache.CacheInsert(new MemoryStream(File.ReadAllBytes(model.FilePath)));
+
+                //bufferIds = apiCache.CacheInsert(new MemoryStream(File.ReadAllBytes(model.FilePath)));
+                if (model.File.HasValue)
+                {
+                    bufferIds = UploadFile(model.File.Value.name, model.File.Value.bytes);
+                }
+                else
+                {
+                    bufferIds = UploadFile(model.FilePath);
+                }
+
                 if (isCheckOutForTask)
                 {
                     checkInOutApi.CheckInOutCheckInForTask(
@@ -551,17 +614,19 @@ namespace ACUtils.AXRepository
                         undoCheckOut: true
                     );
                 }
-
             }
 
             profilesApi.ProfilesPut(docNumber, new Abletech.WebApi.Client.Arxivar.Model.ProfileDTO()
             {
                 Fields = profileDto.Fields,
-                Document = bufferIds.Count > 0 ? new Abletech.WebApi.Client.Arxivar.Model.FileDTO() { BufferIds = bufferIds } : default(Abletech.WebApi.Client.Arxivar.Model.FileDTO),
+                Document = bufferIds.Count > 0
+                    ? new Abletech.WebApi.Client.Arxivar.Model.FileDTO() { BufferIds = bufferIds }
+                    : default(Abletech.WebApi.Client.Arxivar.Model.FileDTO),
             });
 
             return docNumber;
         }
+
         #endregion
 
         #region profile - delete
@@ -605,7 +670,8 @@ namespace ACUtils.AXRepository
 
         #region profile - create
 
-        public int? CreateProfile<T>(AXModel<T> model, bool updateIfExists = false, int checkInOption = 0, bool killworkflow = false) where T : AXModel<T>, new()
+        public int? CreateProfile<T>(AXModel<T> model, bool updateIfExists = false, int checkInOption = 0,
+            bool killworkflow = false) where T : AXModel<T>, new()
         {
             Login();
 
@@ -629,15 +695,17 @@ namespace ACUtils.AXRepository
             var profileApi = new Abletech.WebApi.Client.Arxivar.Api.ProfilesApi(configuration);
             var statesApi = new Abletech.WebApi.Client.Arxivar.Api.StatesApi(configuration);
 
-            var aooApi = new Abletech.WebApi.Client.Arxivar.Api.BusinessUnitsApi(configuration);
-            var aoo = aooApi.BusinessUnitsGet(null, null).First(); // TODO: change me
 
             List<string> bufferId = new List<string>();
-
-            if (!string.IsNullOrEmpty(model.FilePath))
+            if (model.File.HasValue)
+            {
+                bufferId = UploadFile(model.File.Value.name, model.File.Value.bytes);
+            }
+            else if (!string.IsNullOrEmpty(model.FilePath))
             {
                 bufferId = UploadFile(model.FilePath);
             }
+
             var documentType = model.GetArxivarAttribute().DocumentType;
 
             var profileDto = profileApi.ProfilesGet_0();
@@ -645,7 +713,8 @@ namespace ACUtils.AXRepository
             profileDto.AuthorityData = new Abletech.WebApi.Client.Arxivar.Model.AuthorityDataDTO();
             profileDto.Notes = new List<Abletech.WebApi.Client.Arxivar.Model.NoteDTO>();
             profileDto.PaNotes = new List<string>();
-            profileDto.PostProfilationActions = new List<Abletech.WebApi.Client.Arxivar.Model.PostProfilationActionDTO>();
+            profileDto.PostProfilationActions =
+                new List<Abletech.WebApi.Client.Arxivar.Model.PostProfilationActionDTO>();
             profileDto.Document = new Abletech.WebApi.Client.Arxivar.Model.FileDTO() { BufferIds = bufferId };
 
             if (model.Allegati != null)
@@ -661,7 +730,7 @@ namespace ACUtils.AXRepository
                 profileDto.Attachments.AddRange(model.allegati_arxivar);
             }
 
-            var classeDoc = profileDto.SetDocumentType(configuration, aoo.Code, documentType);
+            var classeDoc = profileDto.SetDocumentType(configuration, this._aoo, documentType);
 
             var status = statesApi.StatesGet(classeDoc.Id);
             profileDto.SetState(model.GetArxivarAttribute().Stato ?? status.First().Id);
@@ -670,7 +739,7 @@ namespace ACUtils.AXRepository
                 classeDoc.DocumentType,
                 classeDoc.Type2,
                 classeDoc.Type3,
-                aoo.Code
+                this._aoo
             );
             profileDto.Fields.AddRange(additional);
 
@@ -714,7 +783,7 @@ namespace ACUtils.AXRepository
             foreach (var field in model.GetArxivarFields())
             {
                 if (field.Value == null) continue;
-                
+
                 if (field.Key.Equals("TO", StringComparison.InvariantCultureIgnoreCase))
                 {
                     /*
@@ -733,15 +802,12 @@ namespace ACUtils.AXRepository
                 }
                 else if (field.Key.Equals(Attributes.AxFromExternalIdFieldAttribute.AX_KEY))
                 {
-
                 }
                 else if (field.Key.Equals(Attributes.AxToExternalIdFieldAttribute.AX_KEY))
                 {
-
                 }
                 else if (field.Key.Equals(Attributes.AxCcExternalIdFieldAttribute.AX_KEY))
                 {
-
                 }
                 else
                 {
@@ -778,6 +844,7 @@ namespace ACUtils.AXRepository
         #endregion
 
         #region download attachments
+
         public string[] DownloadAttachments(int docnumber, string outputFolder, bool ignoreException = false)
         {
             Login();
@@ -816,6 +883,7 @@ namespace ACUtils.AXRepository
 
             return list.ToArray();
         }
+
         #endregion
 
         #region download documento
@@ -834,21 +902,22 @@ namespace ACUtils.AXRepository
                     var fileStream = response.Data as FileStream;
                     var fileName = System.IO.Path.GetFileName(fileStream.Name);
                     MemoryStream memoryStream = new MemoryStream();
-                    fileStream.CopyTo(fileStream);
+                    fileStream.CopyTo(memoryStream);
                     fileStream.Close();
 
                     if (System.IO.File.Exists(fileStream.Name))
                         System.IO.File.Delete(fileStream.Name);
+                    memoryStream.Seek(0, SeekOrigin.Begin);
                     return (memoryStream, fileName);
                 }
             }
             else
             {
                 var fileNameInfo = response.Headers["Content-Disposition"];
-                var filename = (new Regex("filename=\"(.*)\"", RegexOptions.IgnoreCase)).Match(fileNameInfo).Groups[0].Value;
+                var filename = (new Regex("filename=\"(.*)\"", RegexOptions.IgnoreCase)).Match(fileNameInfo).Groups[0]
+                    .Value;
                 return (response.Data, filename);
             }
-
         }
 
         public string DownloadDocument(long docnumber, string outputFolder, bool forView = false)
@@ -862,10 +931,10 @@ namespace ACUtils.AXRepository
             }
         }
 
-
         #endregion
 
         #region Tasks
+
         public int Task_ProcessIdFromTaskid(int taskid)
         {
             Login();
@@ -873,16 +942,21 @@ namespace ACUtils.AXRepository
             return task.ProcessId.Value;
         }
 
-        public IEnumerable<T> Task_GetAttachments<T>(int taskId, string regexpFilterDoctype = null) where T : AXModel<T>, new()
+        public IEnumerable<T> Task_GetAttachments<T>(int taskId, string regexpFilterDoctype = null)
+            where T : AXModel<T>, new()
         {
             Login();
 
             var processId = Task_ProcessIdFromTaskid(taskId);
 
             var profileApi = new Abletech.WebApi.Client.Arxivar.Api.ProfilesApi(configuration);
-            var taskWorkAttachmentsV2Api = new Abletech.WebApi.Client.Arxivar.Api.TaskWorkAttachmentsV2Api(configuration);
-            var attachments = taskWorkAttachmentsV2Api.TaskWorkAttachmentsV2GetAttachmentsByProcessId(processId) as JObject;
-            var targetDocType = String.IsNullOrEmpty(regexpFilterDoctype) ? Regex.Escape((new T()).GetArxivarAttribute().DocumentType) : regexpFilterDoctype;
+            var taskWorkAttachmentsV2Api =
+                new Abletech.WebApi.Client.Arxivar.Api.TaskWorkAttachmentsV2Api(configuration);
+            var attachments =
+                taskWorkAttachmentsV2Api.TaskWorkAttachmentsV2GetAttachmentsByProcessId(processId) as JObject;
+            var targetDocType = String.IsNullOrEmpty(regexpFilterDoctype)
+                ? Regex.Escape((new T()).GetArxivarAttribute().DocumentType)
+                : regexpFilterDoctype;
             Regex targetDocRx = new Regex(targetDocType, RegexOptions.IgnoreCase);
 
             int i = 0;
@@ -895,12 +969,13 @@ namespace ACUtils.AXRepository
                 if (id == "DOCNUMBER")
                 {
                     docnumber_pos = i;
-
                 }
+
                 if (id == "TIPOALLEGATO")
                 {
                     tipoallegato_pos = i;
                 }
+
                 i++;
             }
 
@@ -923,6 +998,7 @@ namespace ACUtils.AXRepository
                     // TODO: migliorare questa logica 
                     continue;
                 }
+
                 yield return this.GetProfile<T>(docnumber);
             }
         }
@@ -952,8 +1028,10 @@ namespace ACUtils.AXRepository
                     docnumber_pos = i;
                     break;
                 }
+
                 i++;
             }
+
             foreach (var row in docs["data"])
             {
                 var docnumber = (int)row[docnumber_pos];
@@ -963,27 +1041,34 @@ namespace ACUtils.AXRepository
                 yield return (docnumber, this.GetProfile<T>(docnumber));
             }
         }
+
         public Abletech.WebApi.Client.Arxivar.Model.TaskWorkDTO Task_GetByTaskId(int taskid)
         {
             Login();
             var taskWorkV2Api = new Abletech.WebApi.Client.Arxivar.Api.TaskWorkV2Api(configuration);
             return taskWorkV2Api.TaskWorkV2GetTaskWorkById(taskid);
         }
+
         public void Task_AggiungiAllegato(int taskWorkId, string filePath, string filename = null)
         {
             Login();
             var taskWorkAttachV2Api = new Abletech.WebApi.Client.Arxivar.Api.TaskWorkAttachmentsV2Api(configuration);
             var bufferId = UploadFile(filePath, filename: filename).First();
-            taskWorkAttachV2Api.TaskWorkAttachmentsV2AddNewExternalAttachments(bufferId: bufferId, taskWorkId: taskWorkId);
+            taskWorkAttachV2Api.TaskWorkAttachmentsV2AddNewExternalAttachments(bufferId: bufferId,
+                taskWorkId: taskWorkId);
         }
+
         public long Task_GetUserIdOfTaskId(int processId, int taskWorkId)
         {
             Login();
             var taskHistoryApi = new Abletech.WebApi.Client.Arxivar.Api.TaskWorkHistoryApi(configuration);
             var taskHistory = taskHistoryApi.TaskWorkHistoryGetHistoryByProcessId(processId);
-            var userId = (from task in taskHistory where task.GetValue<long>("ID") == taskWorkId select task.Columns.GetValue<long>("UTENTE")).First();
+            var userId = (from task in taskHistory
+                where task.GetValue<long>("ID") == taskWorkId
+                select task.Columns.GetValue<long>("UTENTE")).First();
             return userId;
         }
+
         #endregion
 
         #region fascioli
@@ -1010,6 +1095,8 @@ namespace ACUtils.AXRepository
         public List<Abletech.WebApi.Client.Arxivar.Model.FolderDTO> GetFascoloFiglio(int id, string name)
         {
             Login();
+            var foldersApi2 = new Abletech.WebApi.Client.Arxivar.Api.FoldersV2Api(configuration);
+            return foldersApi2.FoldersV2FindInFolderByName(id, name);
             var foldersApi = new Abletech.WebApi.Client.Arxivar.Api.FoldersApi(configuration);
             return foldersApi.FoldersFindInFolderByName(id, name);
         }
@@ -1051,6 +1138,7 @@ namespace ACUtils.AXRepository
                 var newfodler = foldersApi.FoldersNew(parentFolder, subfodlerName);
                 subfodler = newfodler.Id.Value;
             }
+
             return subfodler;
         }
 
@@ -1078,14 +1166,18 @@ namespace ACUtils.AXRepository
             {
                 foldersApi.FoldersRemoveDocumentsInFolder(parentFolder, new List<int?>() { docnumber });
             }
-            catch { }
+            catch
+            {
+            }
 
             // rimuove se già presente 
             try
             {
                 foldersApi.FoldersRemoveDocumentsInFolder(folderId, new List<int?>() { docnumber });
             }
-            catch { }
+            catch
+            {
+            }
 
             // aggiungi alla cartella di destinazione
             FascicoliMoveToFolder(folderId, docnumber);
@@ -1095,6 +1187,34 @@ namespace ACUtils.AXRepository
         #endregion
 
         #region users
+
+        public Abletech.WebApi.Client.Arxivar.Model.UserProfileDTO GetUserAddressBookEntry(string username,
+            int type = 0)
+        {
+            Login();
+
+            var addressBookApi = new Abletech.WebApi.Client.Arxivar.Api.AddressBookApi(configuration);
+            var userApi = new Abletech.WebApi.Client.Arxivar.Api.UsersApi(configuration);
+            // Dm_Rubrica.RAGIONE_SOCIALE = username | Dm_Rubrica.TIPO=U | Dm_Rubrica.STATO=P
+            var users = userApi.UsersGet_0();
+            var search = users.Where(u =>
+                u.Description.Equals(username, StringComparison.CurrentCultureIgnoreCase) ||
+                u.CompleteName.Equals(username, StringComparison.CurrentCultureIgnoreCase)
+            );
+            var id = search.FirstOrDefault()?.User;
+            return addressBookApi.AddressBookGetByUserId(id, type);
+        }
+
+
+        public Abletech.WebApi.Client.Arxivar.Model.UserInfoDTO UserInfo()
+        {
+            Login();
+            var api = new Abletech.WebApi.Client.Arxivar.Api.UsersApi(configuration);
+            var userInfo = api.UsersGetUserInfo();
+            return userInfo;
+        }
+
+
         public List<Abletech.WebApi.Client.Arxivar.Model.UserCompleteDTO> Users()
         {
             Login();
@@ -1115,11 +1235,15 @@ namespace ACUtils.AXRepository
                 .SetString("DESCRIPTION", username)
                 .SetString("AOO", aoo);
 
-            var result = userSearchApi.UserSearchPostSearch(new Abletech.WebApi.Client.Arxivar.Model.UserSearchCriteriaDTO(selectDto: select, searchDto: search)).FirstOrDefault();
+            var result = userSearchApi
+                .UserSearchPostSearch(
+                    new Abletech.WebApi.Client.Arxivar.Model.UserSearchCriteriaDTO(selectDto: select,
+                        searchDto: search)).FirstOrDefault();
             if (result == null)
             {
                 throw new NotFoundException($"user '{aoo}\\{username}' not found");
             }
+
             var userApi = new Abletech.WebApi.Client.Arxivar.Api.UsersApi(configuration);
             var userId = result.GetValue<int>("UTENTE");
             return userApi.UsersGet(userId);
@@ -1155,7 +1279,8 @@ namespace ACUtils.AXRepository
             Login();
             LoginManagment();
             var userApi = new Abletech.WebApi.Client.Arxivar.Api.UsersApi(configuration);
-            var usersManagementApi = new Abletech.WebApi.Client.ArxivarManagement.Api.UsersManagementApi(configurationManagement);
+            var usersManagementApi =
+                new Abletech.WebApi.Client.ArxivarManagement.Api.UsersManagementApi(configurationManagement);
 
             var newUser = userApi.UsersInsert(
                 new Abletech.WebApi.Client.Arxivar.Model.UserInsertDTO()
@@ -1180,18 +1305,20 @@ namespace ACUtils.AXRepository
             );
 
 
-
             if (groups != null)
             {
                 var existingGroups = userApi.UsersGetGroups();
-                var newGroups = existingGroups.Where(
-                        group => groups.Select(g => g.ToLower()).Contains(group.CompleteName.ToLower()) ||
-                                 groups.Select(g => g.ToLower()).Contains(group.Description.ToLower())
+                var newGroups = existingGroups.Where(group =>
+                        groups.Select(g => g.ToLower()).Contains(group.CompleteName.ToLower()) ||
+                        groups.Select(g => g.ToLower()).Contains(group.Description.ToLower())
                     )
-                    .Select(g => new Abletech.WebApi.Client.ArxivarManagement.Model.UserSimpleDTO(user: g.Id, description: g.Description))
+                    .Select(g =>
+                        new Abletech.WebApi.Client.ArxivarManagement.Model.UserSimpleDTO(user: g.Id,
+                            description: g.Description))
                     .ToList();
                 usersManagementApi.UsersManagementSetUserGroups(userId: newUser.User, groups: newGroups);
             }
+
             return true;
         }
 
@@ -1228,6 +1355,7 @@ namespace ACUtils.AXRepository
             {
                 UserAddGroup(aoo, username, group);
             }
+
             return false;
         }
 
@@ -1235,25 +1363,30 @@ namespace ACUtils.AXRepository
         {
             Login();
             LoginManagment();
-            var usersManagementApi = new Abletech.WebApi.Client.ArxivarManagement.Api.UsersManagementApi(configurationManagement);
+            var usersManagementApi =
+                new Abletech.WebApi.Client.ArxivarManagement.Api.UsersManagementApi(configurationManagement);
             var userApi = new Abletech.WebApi.Client.Arxivar.Api.UsersApi(configuration);
 
             var user = UserGet(aoo, username);
             var existingGroups = userApi.UsersGetGroups();
-            var group = existingGroups.FirstOrDefault(
-                g => g.Description.Equals(groupName, StringComparison.CurrentCultureIgnoreCase)
+            var group = existingGroups.FirstOrDefault(g =>
+                g.Description.Equals(groupName, StringComparison.CurrentCultureIgnoreCase)
             );
             if (group == null)
             {
                 throw new NotFoundException($"Arxivar group '{groupName}' not found");
             }
+
             var userGroups = usersManagementApi.UsersManagementGetUserGroups(user.User);
             if (!userGroups.Any(g => g.Description.Equals(groupName, StringComparison.CurrentCultureIgnoreCase)))
             {
-                userGroups.Add(new Abletech.WebApi.Client.ArxivarManagement.Model.UserSimpleDTO(user: group.Id, description: group.Description));
+                userGroups.Add(
+                    new Abletech.WebApi.Client.ArxivarManagement.Model.UserSimpleDTO(user: group.Id,
+                        description: group.Description));
                 usersManagementApi.UsersManagementSetUserGroups(userId: user.User, groups: userGroups);
                 return true;
             }
+
             return false;
         }
 
@@ -1333,29 +1466,26 @@ namespace ACUtils.AXRepository
 
         public void Wf2_SetVariable(Guid taskId, string name, string value)
         {
-            var taskOperationsApi = new Abletech.WebApi.Client.ArxivarWorkflow.Api.TaskOperationsApi(configurationWorkflow);
+            var taskOperationsApi =
+                new Abletech.WebApi.Client.ArxivarWorkflow.Api.TaskOperationsApi(configurationWorkflow);
 
             var response = taskOperationsApi.ApiV1TaskOperationsTaskTaskIdVariablesGet(taskId);
 
             var variable = response.First(v => v.VariableDefinition.Configuration.Name.Equals(name));
 
-            taskOperationsApi.ApiV1TaskOperationsExecuteSetVariablesPost(new Abletech.WebApi.Client.ArxivarWorkflow.Model.ExecuteSetVariablesOperationRm(
-
-                setVariables: new List<Abletech.WebApi.Client.ArxivarWorkflow.Model.ProcessManualSetVariableRm>()
-                {
+            taskOperationsApi.ApiV1TaskOperationsExecuteSetVariablesPost(
+                new Abletech.WebApi.Client.ArxivarWorkflow.Model.ExecuteSetVariablesOperationRm(
+                    setVariables: new List<Abletech.WebApi.Client.ArxivarWorkflow.Model.ProcessManualSetVariableRm>()
                     {
-                        new Abletech.WebApi.Client.ArxivarWorkflow.Model.ProcessManualSetVariableRm()
+                        {
+                            new Abletech.WebApi.Client.ArxivarWorkflow.Model.ProcessManualSetVariableRm()
+                        }
                     }
-                }
-
                 )
-            {
-                
-            });
-
-
-
+                {
+                });
         }
+
         #endregion
     }
 }
