@@ -601,7 +601,7 @@ namespace ACUtils.AXRepository
                 {
                     bufferIds = UploadFile(model.FilePath, cacheInsert: true);
                 }
-
+               
                 if (isCheckOutForTask)
                 {
                     checkInOutApi.CheckInOutCheckInForTask(
@@ -621,14 +621,57 @@ namespace ACUtils.AXRepository
                 }
             }
 
-            profilesApi.ProfilesPut(docNumber, new Abletech.WebApi.Client.Arxivar.Model.ProfileDTO()
+            profileDto.Attachments = new List<string>();
+            if (model.Allegati != null)
             {
-                Fields = profileDto.Fields,
-                Document = bufferIds.Count > 0
-                    ? new Abletech.WebApi.Client.Arxivar.Model.FileDTO() { BufferIds = bufferIds }
-                    : default(Abletech.WebApi.Client.Arxivar.Model.FileDTO),
-            });
+                foreach (var allegato in model.Allegati)
+                {
+                    profileDto.Attachments.AddRange(UploadFile(allegato));
+                }
+            }
 
+            if (model.AllegatiBin != null)
+            {
+                foreach (var allegato in model.AllegatiBin)
+                {
+                    profileDto.Attachments.AddRange(UploadFile(allegato.name, allegato.bytes));
+                }
+            }
+
+            if (model.allegati_arxivar != null)
+            {
+                profileDto.Attachments.AddRange(model.allegati_arxivar);
+            }
+            
+            var up = new Abletech.WebApi.Client.Arxivar.Model.ProfileDTO()
+            {
+                Fields = profileDto.Fields
+            };
+            
+            
+
+            if (bufferIds.Count > 0)
+            {
+                up.Document = new Abletech.WebApi.Client.Arxivar.Model.FileDTO() { BufferIds = bufferIds };
+            }
+            
+            profilesApi.ProfilesPut(docNumber, up);
+            
+            
+            if (profileDto.Attachments != null && profileDto.Attachments.Count > 0)
+            {
+                var attachmentApi = new Abletech.WebApi.Client.Arxivar.Api.AttachmentsApi(configuration);
+                var actual = attachmentApi.AttachmentsGetByDocnumber(docNumber);
+                foreach (var attachmentDto in actual)
+                {
+                    attachmentApi.AttachmentsDelete(attachmentDto.Id);
+                }
+                foreach (var attachment in profileDto.Attachments)
+                {
+                    attachmentApi.AttachmentsInsertExternal(attachment, docNumber, "");
+                }
+            }
+            
             return docNumber;
         }
 
@@ -675,8 +718,7 @@ namespace ACUtils.AXRepository
 
         #region profile - create
 
-        public int? CreateProfile<T>(AXModel<T> model, bool updateIfExists = false, int checkInOption = 0,
-            bool killworkflow = false) where T : AXModel<T>, new()
+        public int? CreateProfile<T>(AXModel<T> model, bool updateIfExists = false, int checkInOption = 0, bool killworkflow = false) where T : AXModel<T>, new()
         {
             Login();
 
