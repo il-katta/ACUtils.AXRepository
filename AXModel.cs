@@ -69,9 +69,14 @@ namespace ACUtils.AXRepository
         public virtual bool? Workflow { get; set; }
         
         /// <summary>
-        /// lista di files ( percorsi assoluti di files ) da aggiungere come allegati al documento
+        /// lista di files (percorsi assoluti di files) da aggiungere come allegati al documento
         /// </summary>
-        public virtual List<string>? Allegati { get; set; }
+        public virtual List<string> Allegati { get; set; }
+        
+        /// <summary>
+        /// lista di files da aggiungere come allegati al documento
+        /// </summary>
+        public virtual List<(string name, byte[] bytes)> AllegatiBin { get; set; }
 
         /// <summary>
         /// lista di bufferid di file da aggiungere come allegato al documento

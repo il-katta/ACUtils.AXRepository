@@ -233,6 +233,10 @@ namespace ACUtils.AXRepository
             {
                 (field as AdditionalFieldTableDTO).Value = (string)value;
             }
+            else if (field?.ClassName == "NumberFieldDTO")
+            {
+                (field as NumberFieldDTO).Value = (string) value;
+            }
             else
             {
                 throw new Exception($"'{name}' - type '{field?.ClassName}': not permitted ");

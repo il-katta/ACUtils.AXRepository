@@ -222,8 +222,8 @@ namespace ACUtils.AXRepository
 
             var result = results.Data.First();
 
-            var contactId = result.GetValue<int>("ID");
-            var addressBookId = result.GetValue<int>("DM_RUBRICA_SYSTEM_ID");
+            var contactId = result.GetValue<int>("ID");  // workaround: ID è di tipo long ma le funzioni che prendono ID come parametro sono di tipo int.
+            var addressBookId = result.GetValue<int>("DM_RUBRICA_SYSTEM_ID"); // workaround: come sopra, è un long ma le funzioni accettano un int.
 
             var addressBook = addressBookApi.AddressBookGetById(addressBookId: addressBookId);
             return new Abletech.WebApi.Client.Arxivar.Model.UserProfileDTO(
@@ -355,8 +355,8 @@ namespace ACUtils.AXRepository
             Dictionary<string, object> searchValues = null, bool eliminato = false, bool selectAll = false)
         {
             Login();
-            var profileApi = new Abletech.WebApi.Client.Arxivar.Api.ProfilesApi(configuration);
-            var statesApi = new Abletech.WebApi.Client.Arxivar.Api.StatesApi(configuration);
+            
+            
 
             var searchApi = new Abletech.WebApi.Client.Arxivar.Api.SearchesApi(configuration);
             var docTypesApi = new Abletech.WebApi.Client.Arxivar.Api.DocumentTypesApi(configuration);
@@ -722,6 +722,14 @@ namespace ACUtils.AXRepository
                 foreach (var allegato in model.Allegati)
                 {
                     profileDto.Attachments.AddRange(UploadFile(allegato));
+                }
+            }
+
+            if (model.AllegatiBin != null)
+            {
+                foreach (var allegato in model.AllegatiBin)
+                {
+                    profileDto.Attachments.AddRange(UploadFile(allegato.name, allegato.bytes));
                 }
             }
 
