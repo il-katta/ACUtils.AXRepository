@@ -111,11 +111,19 @@ namespace ACUtils.AXRepository
 
         #region file upload
 
-        public List<string> UploadFile(Stream stream)
+        public List<string> UploadFile(Stream stream, bool cacheInsert = false)
         {
             Login();
-            var bufferApi = new Abletech.WebApi.Client.Arxivar.Api.BufferApi(configuration);
-            return bufferApi.BufferInsert(stream);
+            if (cacheInsert)
+            {
+                var cacheApi = new Abletech.WebApi.Client.Arxivar.Api.CacheApi(configuration);
+                return cacheApi.CacheInsert(stream);
+            }
+            else
+            {
+                var bufferApi = new Abletech.WebApi.Client.Arxivar.Api.BufferApi(configuration);
+                return bufferApi.BufferInsert(stream);
+            }
         }
 
         private string GetTemporaryDirectory()
@@ -125,10 +133,10 @@ namespace ACUtils.AXRepository
             return tempDirectory;
         }
 
-        public List<string> UploadFile(string filename, byte[] bytes)
+        public List<string> UploadFile(string filename, byte[] bytes, bool cacheInsert = false)
         {
             Login();
-            var bufferApi = new Abletech.WebApi.Client.Arxivar.Api.BufferApi(configuration);
+            
             var tmpDir = GetTemporaryDirectory();
             try
             {
@@ -140,7 +148,7 @@ namespace ACUtils.AXRepository
                         stream.WriteTo(fileStream);
                         fileStream.Flush();
                         fileStream.Seek(0, SeekOrigin.Begin);
-                        return bufferApi.BufferInsert(fileStream);
+                        return UploadFile(fileStream, cacheInsert);
                     }
                 }
             }
@@ -156,7 +164,7 @@ namespace ACUtils.AXRepository
             }
         }
 
-        public List<string> UploadFile(string filePath, string filename = null)
+        public List<string> UploadFile(string filePath, string filename = null, bool cacheInsert = false)
         {
             Login();
 
@@ -171,7 +179,7 @@ namespace ACUtils.AXRepository
 
                 using (var stream = File.Open(tmppath, FileMode.Open))
                 {
-                    return bufferApi.BufferInsert(stream);
+                    return UploadFile(stream, cacheInsert);
                 }
             }
             finally
@@ -512,8 +520,7 @@ namespace ACUtils.AXRepository
                         var taskworkhistoryapi =
                             new Abletech.WebApi.Client.Arxivar.Api.TaskWorkHistoryApi(configuration);
                         var history = taskworkhistoryapi.TaskWorkHistoryGetHistoryByProcessId(processId);
-                        if (!history.Where(r => !r.GetValue<DateTime?>("CONCLUSO").HasValue)
-                                .Any()) // WTF? controllare questa condizione
+                        if (!history.Where(r => !r.GetValue<DateTime?>("CONCLUSO").HasValue) .Any()) // WTF? controllare questa condizione
                         {
                             DeleteWorkflow(processId);
                         }
@@ -568,7 +575,6 @@ namespace ACUtils.AXRepository
 
             if (!string.IsNullOrEmpty(model.FilePath) || model.File.HasValue)
             {
-                var apiCache = new Abletech.WebApi.Client.Arxivar.Api.CacheApi(configuration);
                 var checkInOutApi = new Abletech.WebApi.Client.Arxivar.Api.CheckInOutApi(configuration);
                 //var taskWorkApi = new ArxivarNext.Api.TaskWorkApi(configuration);
 
@@ -587,14 +593,13 @@ namespace ACUtils.AXRepository
                     checkInOutApi.CheckInOutCheckOut(System.Convert.ToInt32(docNumber));
                 }
 
-                //bufferIds = apiCache.CacheInsert(new MemoryStream(File.ReadAllBytes(model.FilePath)));
                 if (model.File.HasValue)
                 {
-                    bufferIds = UploadFile(model.File.Value.name, model.File.Value.bytes);
+                    bufferIds = UploadFile(model.File.Value.name, model.File.Value.bytes, cacheInsert: true);
                 }
                 else
                 {
-                    bufferIds = UploadFile(model.FilePath);
+                    bufferIds = UploadFile(model.FilePath, cacheInsert: true);
                 }
 
                 if (isCheckOutForTask)
@@ -682,6 +687,7 @@ namespace ACUtils.AXRepository
                 {
                     if (updateIfExists)
                     {
+                        model.DOCNUMBER = search.First().DOCNUMBER; // avoid search again during update 
                         var docNumber = UpdateProfile(model, checkInOption: checkInOption, killWorkflow: killworkflow);
                         return System.Convert.ToInt32(docNumber);
                     }
