@@ -270,7 +270,19 @@ namespace ACUtils.AXRepository
         {
             fields.SetField("From", value);
         }
-
+        
+        public static EditProfileSchemaDTO SetToField(this EditProfileSchemaDTO self, UserProfileDTO value)
+        {
+            self.Fields.SetToField(value);
+            return self;
+        }
+        
+        public static EditProfileSchemaDTO SetFromField(this EditProfileSchemaDTO self, UserProfileDTO value)
+        {
+            self.Fields.SetFromField(value);
+            return self;
+        }
+        
         public static UserSearchDTO SetString(this UserSearchDTO self, string name, string value, int operator_ = 3)
         {
             self.StringFields.Set(name: name, value: value, operator_: operator_);
@@ -361,10 +373,22 @@ namespace ACUtils.AXRepository
             fields.First(i => i.Name.Equals(name, StringComparison.CurrentCultureIgnoreCase)).Selected = true;
             return fields;
         }
-
+        
         public static List<RubricaFieldDTO> Select(this List<RubricaFieldDTO> fields, string name)
         {
             fields.First(i => i.KeyField.Equals(name, StringComparison.CurrentCultureIgnoreCase)).Selected = true;
+            return fields;
+        }
+
+        public static List<RubricaFieldDTO> UnselectAll(this List<RubricaFieldDTO> fields)
+        {
+            fields.ForEach(f => f.Selected = false);
+            return fields;
+        }
+
+        public static List<RubricaFieldDTO> SelectAll(this List<RubricaFieldDTO> fields)
+        {
+            fields.ForEach(f => f.Selected = true);
             return fields;
         }
     }

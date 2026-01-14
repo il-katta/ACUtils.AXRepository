@@ -212,13 +212,8 @@ namespace ACUtils.AXRepository
             Login();
 
             var addressBookApi = new Abletech.WebApi.Client.Arxivar.Api.AddressBookApi(configuration);
-            var filter = addressBookApi.AddressBookGetSearchField();
-            var select = addressBookApi.AddressBookGetSelectField()
-                .Select("DM_RUBRICA_CODICE")
-                .Select("DM_RUBRICA_AOO")
-                .Select("DM_RUBRICA_CODICE")
-                .Select("DM_RUBRICA_SYSTEM_ID")
-                .Select("ID");
+            var filter = addressBookApi.AddressBookGetSearchField().UnselectAll().Select("Dm_Rubrica.CODICE");
+            var select = addressBookApi.AddressBookGetSelectField().SelectAll();
 
             var results = addressBookApi.AddressBookPostSearch(
                 new Abletech.WebApi.Client.Arxivar.Model.AddressBookSearchCriteriaDTO(
@@ -226,7 +221,8 @@ namespace ACUtils.AXRepository
                     addressBookCategoryId: addressBookCategoryId,
                     filterFields: filter,
                     selectFields: select
-                ));
+                )
+            );
 
             var result = results.Data.First();
 
@@ -256,10 +252,10 @@ namespace ACUtils.AXRepository
                 department: "",
                 reference: "",
                 office: "",
-                vat: "",
+                vat: addressBook.VatNumber,
                 mail: "",
                 priority: "N", // addressBook.Priority,
-                code: null,
+                code: addressBook.ExternalCode,
                 email: addressBook.Email,
                 fiscalCode: addressBook.FiscalCode,
                 nation: addressBook.Country,
@@ -544,11 +540,20 @@ namespace ACUtils.AXRepository
             {
                 profileDto.SetField("DataDoc", model.DataDoc.Value);
             }
-
-            if (!string.IsNullOrEmpty(model.STATO))
+            
+            if (!string.IsNullOrEmpty(model.MittenteCodiceRubrica))
             {
-                profileDto.SetState(model.STATO);
+                if (model.MittenteIdRubrica.HasValue)
+                {
+                    profileDto.SetFromField(GetAddressBookEntry(
+                        model.MittenteCodiceRubrica,
+                        model.MittenteIdRubrica.Value,
+                        type: UserProfileType.From
+                    ));
+                }
             }
+
+            
 
             /*
             try
@@ -562,6 +567,7 @@ namespace ACUtils.AXRepository
             {
                 try
                 {
+                    //if ((field.Key == "To" || field.Key == "From" ) && field.Value==null) continue;
                     profileDto.SetField(field.Key, field.Value);
                 }
                 catch (AXFieldNotFoundException)
@@ -572,7 +578,23 @@ namespace ACUtils.AXRepository
                     ) throw;
                 }
             }
+            
+            if (model.DestinatariCodiceRubrica != null)
+            {
+                foreach (var destinatario in model.DestinatariCodiceRubrica)
+                {
+                    profileDto.SetToField(GetAddressBookEntry(
+                        destinatario,
+                        model.DestinatariIdRubrica ?? 0,
+                        type: UserProfileType.To
+                    ));
+                }
+            }
 
+            if (!string.IsNullOrEmpty(model.STATO))
+            {
+                profileDto.SetState(model.STATO);
+            }
             if (!string.IsNullOrEmpty(model.FilePath) || model.File.HasValue)
             {
                 var checkInOutApi = new Abletech.WebApi.Client.Arxivar.Api.CheckInOutApi(configuration);
