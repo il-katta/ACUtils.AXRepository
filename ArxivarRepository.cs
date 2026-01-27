@@ -23,8 +23,10 @@ namespace ACUtils.AXRepository
         protected string _wcfUrl;
         protected long? _impersonateUserId;
 
-        protected string _token;
-        protected string _refreshToken;
+        private string _token;
+        private string _refreshToken;
+        private DateTime _token_timestamp;
+        private DateTime? _token_expire;
 
         protected string _tokenManagement;
         protected string _refreshTokenManagement;
@@ -98,13 +100,6 @@ namespace ACUtils.AXRepository
             this._logger = logger;
             this._aoo = AO;
             _token = authToken;
-        }
-
-
-        public void authToken(string token, string refreshToken)
-        {
-            this._token = token;
-            this._refreshToken = refreshToken;
         }
 
         #endregion
@@ -276,44 +271,67 @@ namespace ACUtils.AXRepository
 
         #region auth
 
-        private Abletech.WebApi.Client.Arxivar.Model.AuthenticationTokenDTO _login(List<string> scopeList = null)
-        {
-            var authApi = new Abletech.WebApi.Client.Arxivar.Api.AuthenticationApi(_apiUrl);
-            var auth = authApi.AuthenticationGetToken(
-                new Abletech.WebApi.Client.Arxivar.Model.AuthenticationTokenRequestDTO(
-                    username: _username,
-                    password: _password,
-                    clientId: _appId,
-                    clientSecret: _appSecret,
-                    impersonateUserId: _impersonateUserId.HasValue
-                        ? System.Convert.ToInt32(_impersonateUserId)
-                        : default(int?),
-                    scopeList: scopeList
-                )
-            );
-            return auth;
-        }
-
-
         private void Login()
         {
-            if (string.IsNullOrEmpty(_token)) // TODO: test se è necessario il refresh del token
+            if (string.IsNullOrEmpty(_token) || (_token_expire.HasValue && DateTime.Now > _token_expire.Value))
             {
-                var auth = _login();
-                _token = auth.AccessToken;
-                _refreshToken = auth.RefreshToken;
+                (_token, _refreshToken, _token_expire) = GetAuthenticationToken(_impersonateUserId);
+                _token_timestamp = DateTime.Now;
             }
         }
 
+        internal (string token, string refresh_token, DateTime token_expire) GetAuthenticationToken(long? impersonateUserId, List<string> scopeList = null)
+        {
+            var authApi = new Abletech.WebApi.Client.Arxivar.Api.AuthenticationApi(_apiUrl);
+            var auth = authApi.AuthenticationGetToken(
+                new Abletech.WebApi.Client.Arxivar.Model.AuthenticationTokenRequestDTO()
+                {
+                    Username = _username,
+                    Password = _password,
+                    ClientId = _appId,
+                    ClientSecret = _appSecret,
+                    ImpersonateUserId = impersonateUserId.HasValue ? System.Convert.ToInt32(impersonateUserId) : default(int?),
+                    ScopeList = scopeList
+                }
+            );
+
+            DateTime tokenExpire;
+            if (auth.ExpiresIn.HasValue)
+            {
+                tokenExpire = DateTime.Now + TimeSpan.FromSeconds(auth.ExpiresIn.Value);
+            }
+            else
+            {
+                tokenExpire = DateTime.Now + TimeSpan.FromSeconds(3600);
+            }
+            return (auth.AccessToken, auth.RefreshToken, tokenExpire);
+        }
+
+        public void SetImpersonateUserId(long? userId)
+        {
+            if (userId != _impersonateUserId)
+            {
+                _impersonateUserId = userId;
+                ResetToken();
+            }
+        }
+
+        public void ResetToken()
+        {
+            _token = null;
+            _token_expire = null;
+            _token_timestamp = DateTime.MinValue;
+            _impersonateUserId = null;
+        }
+        
 
         private void LoginManagment()
         {
             if (string.IsNullOrEmpty(_tokenManagement))
             {
                 var scopeList = new List<string> { "ArxManagement" };
-                var auth = _login(scopeList);
-                _tokenManagement = auth.AccessToken;
-                _refreshTokenManagement = auth.RefreshToken;
+                (_token, _refreshToken, _token_expire) = GetAuthenticationToken(_impersonateUserId, scopeList);
+                _token_timestamp = DateTime.Now;
             }
         }
 
@@ -552,9 +570,7 @@ namespace ACUtils.AXRepository
                     ));
                 }
             }
-
             
-
             /*
             try
             {
